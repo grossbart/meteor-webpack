@@ -219,7 +219,7 @@ function arrangeConfig(webpackConfig) {
                     app: singleWebpackConfig.entry
                 };
             }
-            //singleWebpackConfig.devServer.serverSideRender = true;
+            singleWebpackConfig.devServer.serverSideRender = true;
             for (const key in singleWebpackConfig.entry) {
                 singleWebpackConfig.entry[key].push('webpack-hot-middleware/client?reload=true');
             }
@@ -242,14 +242,16 @@ if (Meteor.isServer && Meteor.isDevelopment) {
         const clientConfig = webpackConfig.find(singleWebpackConfig => (singleWebpackConfig.target !== 'node'))
         const clientCompiler = compiler.compilers.find(compiler => (compiler.name == 'client'));
         const serverConfig = webpackConfig.find(singleWebpackConfig => (singleWebpackConfig.target == 'node'))
-        clientConfig.devServer.contentBase = clientConfig.devServer.contentBase || clientCompiler.outputPath;
-        clientConfig.devServer.publicPath = clientConfig.devServer.publicPath || (clientConfig.output && clientConfig.output.publicPath);
+        clientConfig.devServer.devMiddleware = clientConfig.devServer.devMiddleware || {}
+        clientConfig.devServer.devMiddleware.publicPath = clientConfig.devServer.devMiddleware.publicPath || (clientConfig.output && clientConfig.output.publicPath)
+        // clientConfig.devServer.contentBase = clientConfig.devServer.contentBase || clientCompiler.outputPath;
+        // clientConfig.devServer.publicPath = clientConfig.devServer.publicPath || (clientConfig.output && clientConfig.output.publicPath);
         const HEAD_REGEX = /<head[^>]*>((.|[\n\r])*)<\/head>/im
         const BODY_REGEX = /<body[^>]*>((.|[\n\r])*)<\/body>/im;
       
         WebApp.rawConnectHandlers.use(webpackDevMiddleware(compiler, {
             index: false,
-            ...clientConfig.devServer,
+            ...clientConfig.devServer.devMiddleware,
         }));
 
         let head
@@ -305,7 +307,8 @@ if (Meteor.isServer && Meteor.isDevelopment) {
             }
             if(Package['accounts-base']) {
                 const { Accounts } = Package['accounts-base']
-                Accounts._loginHandlers = loginHandlers
+                // FIXME This does not work as it should and prevents custom login handlers
+                // Accounts._loginHandlers = loginHandlers
                 Accounts._validateNewUserHooks = validateNewUserHooks
                 Accounts._options = Object.assign({}, accountsOptions)
                 Accounts._validateLoginHook.callbacks = Object.assign({}, _validateLoginHookCallbacks)
