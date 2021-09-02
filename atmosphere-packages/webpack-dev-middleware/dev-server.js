@@ -250,10 +250,10 @@ if (Meteor.isServer && Meteor.isDevelopment) {
         const HEAD_REGEX = /<head[^>]*>((.|[\n\r])*)<\/head>/im
         const BODY_REGEX = /<body[^>]*>((.|[\n\r])*)<\/body>/im;
 
-        WebApp.rawConnectHandlers.use(Meteor.bindEnvironment(webpackDevMiddleware(compiler, {
+        WebApp.rawConnectHandlers.use(webpackDevMiddleware(compiler, {
             index: false,
             ...clientConfig.devServer.devMiddleware,
-        })));
+        }));
 
         let head
         let body
@@ -273,7 +273,7 @@ if (Meteor.isServer && Meteor.isDevelopment) {
 
         if (clientConfig && clientConfig.devServer && clientConfig.devServer.hot) {
             const webpackHotMiddleware = Npm.require(path.join(projectPath, 'node_modules/webpack-hot-middleware'));
-            WebApp.rawConnectHandlers.use(Meteor.bindEnvironment(webpackHotMiddleware(clientCompiler)));
+            WebApp.rawConnectHandlers.use(webpackHotMiddleware(clientCompiler));
         }
         if (serverConfig && serverConfig.devServer && serverConfig.devServer.hot) {
             WebApp.rawConnectHandlers.use(Meteor.bindEnvironment(webpackHotServerMiddleware(compiler)));
@@ -292,12 +292,12 @@ if (Meteor.isServer && Meteor.isDevelopment) {
         // Restore the state of the Meteor server ahead of hot module replacement
         function restoreInitialServerState() {
             if (isServerStateCached) {
-                Meteor.server.universal_publish_handlers = nullPublications;
+                Meteor.server.universal_publish_handlers = Array.from(nullPublications);
 
                 if (Package['accounts-base']) {
                     const {Accounts} = Package['accounts-base']
-                    Accounts._loginHandlers = loginHandlers
-                    Accounts._validateNewUserHooks = validateNewUserHooks
+                    Accounts._loginHandlers = Array.from(loginHandlers)
+                    Accounts._validateNewUserHooks = Array.from(validateNewUserHooks)
                     Accounts._options = Object.assign({}, accountsOptions)
                     Accounts._validateLoginHook.callbacks = Object.assign({}, _validateLoginHookCallbacks)
                     delete Accounts._onCreateUserHook
