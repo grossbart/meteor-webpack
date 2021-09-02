@@ -301,6 +301,7 @@ if (Meteor.isServer && Meteor.isDevelopment) {
                     Accounts._options = Object.assign({}, accountsOptions)
                     Accounts._validateLoginHook.callbacks = Object.assign({}, _validateLoginHookCallbacks)
                     delete Accounts._onCreateUserHook
+                    delete Accounts._onExternalLoginHook
                 }
             } else {
                 isServerStateCached = true;
