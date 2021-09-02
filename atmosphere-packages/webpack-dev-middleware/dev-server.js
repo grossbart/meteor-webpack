@@ -90,7 +90,7 @@ function webpackHotServerMiddleware(multiCompiler) {
             if (!Meteor.server.sessions.hasOwnProperty(sessionId)) {
                 continue;
             }
-            
+
             // This is flag means that currently worker do processing message
             // and each receiving message over ddp will be cached in queue
             Meteor.server.sessions[sessionId].workerRunning = true;
@@ -176,7 +176,7 @@ function webpackHotServerMiddleware(multiCompiler) {
                 if (!Meteor.server.sessions.hasOwnProperty(sessionId)) {
                     continue;
                 }
-                
+
                 // Reverted back flag to initial value
                 Meteor.server.sessions[sessionId].workerRunning = false;
                 // To replay cached messages need to send on processing some fake message
@@ -243,16 +243,17 @@ if (Meteor.isServer && Meteor.isDevelopment) {
         const clientCompiler = compiler.compilers.find(compiler => (compiler.name == 'client'));
         const serverConfig = webpackConfig.find(singleWebpackConfig => (singleWebpackConfig.target == 'node'))
         clientConfig.devServer.devMiddleware = clientConfig.devServer.devMiddleware || {}
+        //clientConfig.devServer.devMiddleware.stats = clientConfig.devServer.stats
         clientConfig.devServer.devMiddleware.publicPath = clientConfig.devServer.devMiddleware.publicPath || (clientConfig.output && clientConfig.output.publicPath)
         // clientConfig.devServer.contentBase = clientConfig.devServer.contentBase || clientCompiler.outputPath;
         // clientConfig.devServer.publicPath = clientConfig.devServer.publicPath || (clientConfig.output && clientConfig.output.publicPath);
         const HEAD_REGEX = /<head[^>]*>((.|[\n\r])*)<\/head>/im
         const BODY_REGEX = /<body[^>]*>((.|[\n\r])*)<\/body>/im;
-      
-        WebApp.rawConnectHandlers.use(webpackDevMiddleware(compiler, {
+
+        WebApp.rawConnectHandlers.use(Meteor.bindEnvironment(webpackDevMiddleware(compiler, {
             index: false,
             ...clientConfig.devServer.devMiddleware,
-        }));
+        })));
 
         let head
         let body
@@ -272,7 +273,7 @@ if (Meteor.isServer && Meteor.isDevelopment) {
 
         if (clientConfig && clientConfig.devServer && clientConfig.devServer.hot) {
             const webpackHotMiddleware = Npm.require(path.join(projectPath, 'node_modules/webpack-hot-middleware'));
-            WebApp.rawConnectHandlers.use(webpackHotMiddleware(clientCompiler));
+            WebApp.rawConnectHandlers.use(Meteor.bindEnvironment(webpackHotMiddleware(clientCompiler)));
         }
         if (serverConfig && serverConfig.devServer && serverConfig.devServer.hot) {
             WebApp.rawConnectHandlers.use(Meteor.bindEnvironment(webpackHotServerMiddleware(compiler)));
@@ -281,38 +282,46 @@ if (Meteor.isServer && Meteor.isDevelopment) {
         // Cache the initial state of the Meteor server before the application code is executed
         // We can't cache the connect handlers, the old functions are linked to old resources in memory which may or may not exist anymore
         // We could clear them, but that would remove any functionality added by packages
-        let loginHandlers = []
-        let validateNewUserHooks = []
-        let _validateLoginHookCallbacks
-        let accountsOptions = {}
-        let nullPublications = Array.from(Meteor.server.universal_publish_handlers)
-
-        if(Package['accounts-base']) {
-            const { Accounts } = Package['accounts-base']
-            accountsOptions = Object.assign({}, Accounts._options)
-            loginHandlers = Array.from(Accounts._loginHandlers)
-            validateNewUserHooks = Array.from(Accounts._validateNewUserHooks)
-            _validateLoginHookCallbacks = Object.assign({}, Accounts._validateLoginHook.callbacks)
-        }
+        let isServerStateCached = false
+        let nullPublications;
+        let loginHandlers;
+        let validateNewUserHooks
+        let _validateLoginHookCallbacks;
+        let accountsOptions;
 
         // Restore the state of the Meteor server ahead of hot module replacement
-        function cleanServer() {
-            Meteor.server.universal_publish_handlers = nullPublications
-            if(Package['server-render']) {
+        function restoreInitialServerState() {
+            if (isServerStateCached) {
+                Meteor.server.universal_publish_handlers = nullPublications;
+
+                if (Package['accounts-base']) {
+                    const {Accounts} = Package['accounts-base']
+                    Accounts._loginHandlers = loginHandlers
+                    Accounts._validateNewUserHooks = validateNewUserHooks
+                    Accounts._options = Object.assign({}, accountsOptions)
+                    Accounts._validateLoginHook.callbacks = Object.assign({}, _validateLoginHookCallbacks)
+                    delete Accounts._onCreateUserHook
+                }
+            } else {
+                isServerStateCached = true;
+                nullPublications = Array.from(Meteor.server.universal_publish_handlers)
+
+                if(Package['accounts-base']) {
+                    const { Accounts } = Package['accounts-base']
+                    accountsOptions = Object.assign({}, Accounts._options)
+                    loginHandlers = Array.from(Accounts._loginHandlers)
+                    validateNewUserHooks = Array.from(Accounts._validateNewUserHooks)
+                    _validateLoginHookCallbacks = Object.assign({}, Accounts._validateLoginHook.callbacks)
+                }
+            }
+
+            if (Package['server-render']) {
                 Package['server-render'].onPageLoad.clear()
             }
-            if(Package['staringatlights:fast-render']) {
+
+            if (Package['staringatlights:fast-render']) {
                 const FastRender = Package['staringatlights:fast-render'].FastRender
                 FastRender._onAllRoutes = [FastRender._onAllRoutes[0]]
-            }
-            if(Package['accounts-base']) {
-                const { Accounts } = Package['accounts-base']
-                // FIXME This does not work as it should and prevents custom login handlers
-                // Accounts._loginHandlers = loginHandlers
-                Accounts._validateNewUserHooks = validateNewUserHooks
-                Accounts._options = Object.assign({}, accountsOptions)
-                Accounts._validateLoginHook.callbacks = Object.assign({}, _validateLoginHookCallbacks)
-                delete Accounts._onCreateUserHook
             }
         }
 
@@ -362,7 +371,7 @@ if (Meteor.isServer && Meteor.isDevelopment) {
                 })
             }
 
-            cleanServer()
+            restoreInitialServerState();
         });
 
 
